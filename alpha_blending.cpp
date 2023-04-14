@@ -1,21 +1,23 @@
-#include "alpha-blending.hpp"
-
-#define AVX  1
-#define DRAW 1
+#include "alpha_blending.hpp"
 
 typedef sf::Uint8 INT;
 typedef unsigned char BYTE;
 
-int BKGND_WIDTH  = 0;
-int BKGND_HEIGHT = 0;
-int FRGND_WIDTH  = 0;
-int FRGND_HEIGHT = 0;
+const int NUM_MEASURES = 100;
 
 const BYTE ZERO = 0x80;
 
 int main()
 {
     imsizes_t IM_SIZES = {};
+
+    sf::Clock clock;
+    sf::Time elapsed_time_AVX   = clock.getElapsedTime();
+    sf::Time elapsed_time_NoAVX = clock.getElapsedTime();
+
+    int count_measures = 0;
+    float time_sum_avx = 0;
+    float time_sum_noavx = 0;
 
     sf::Image bkgnd_im;
     bkgnd_im.loadFromFile(BKGND_PATH);
@@ -34,19 +36,25 @@ int main()
     sf::Sprite img_sprite;
     img_sprite.setTexture(texture);
 
-    sf::Clock clock;
-
-    #if AVX
-        MakeBlendingAVX(&bkgnd_im, &frgnd_im, 300, 200, &IM_SIZES);
-    #else
-        MakeBlending(&bkgnd_im, &frgnd_im, 300, 200, &IM_SIZES);
-    #endif
+    while (count_measures < NUM_MEASURES)
+    {
+        clock.restart();
+            MakeBlendingAVX(&bkgnd_im, &frgnd_im, 300, 200, &IM_SIZES);
+        elapsed_time_AVX = clock.getElapsedTime();
+        clock.restart();
+            MakeBlending(&bkgnd_im, &frgnd_im, 300, 200, &IM_SIZES);
+        elapsed_time_NoAVX = clock.getElapsedTime();
+        //printf("elapsed time: %f\n", elapsed_time_AVX.asSeconds());
+        time_sum_avx += 1/elapsed_time_AVX.asSeconds()/100;
+        time_sum_noavx += 1/elapsed_time_NoAVX.asSeconds()/100;
+        count_measures++;
+    }
+    
+    printf("end of measuring\n");
 
     bkgnd_im.saveToFile(RES_PATH);
 
-    sf::Time elapsed_time = clock.getElapsedTime();
-
-    printf("It's blending time: %f\n", elapsed_time.asSeconds());
+    //printf("It's blending time: %f\n", elapsed_time.asSeconds());
 
     while (window.isOpen())
     {
@@ -66,6 +74,9 @@ int main()
             window.display();
         #endif
     }
+
+    printf("Averaged AVX FPS: %.2f\n", time_sum_avx/NUM_MEASURES);
+    printf("Averaged No AVX FPS: %.2f\n", time_sum_noavx/NUM_MEASURES);
 }
 
 void MakeBlending(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int offset_y, imsizes_t* IM_SIZES)
@@ -97,49 +108,49 @@ void MakeBlending(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int of
 
 void MakeBlendingAVX(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int offset_y, imsizes_t* IM_SIZES)
 {
-    INT* bk_pixels = (INT*) bkgnd_im->getPixelsPtr();
-    INT* fr_pixels = (INT*) frgnd_im->getPixelsPtr();
+    volatile INT* bk_pixels = (INT*) bkgnd_im->getPixelsPtr();
+    volatile INT* fr_pixels = (INT*) frgnd_im->getPixelsPtr();
 
-    __m256i set1_255_arr = _mm256_set1_epi16(255);
+    volatile __m256i set1_255_arr = _mm256_set1_epi16(255);
 
     for (int y_fr = 0; y_fr < IM_SIZES->fr_height; y_fr++)
     {
-        int y_bk_shift = (y_fr + offset_y) * IM_SIZES->bk_width;
-        int y_fr_shift = y_fr * IM_SIZES->fr_width;
+        volatile int y_bk_shift = (y_fr + offset_y) * IM_SIZES->bk_width;
+        volatile int y_fr_shift = y_fr * IM_SIZES->fr_width;
         
-        for (int x_fr = 0; x_fr < IM_SIZES->fr_width; x_fr+=4)
+        for (volatile int x_fr = 0; x_fr < IM_SIZES->fr_width; x_fr+=4)
         {
-            INT* bkgnd_pixel_ptr =  bk_pixels + 4 * (y_bk_shift + x_fr + offset_x);
-            INT* frgnd_pixel_ptr =  fr_pixels + 4 * (y_fr_shift + x_fr);
+            volatile INT* bkgnd_pixel_ptr =  bk_pixels + 4 * (y_bk_shift + x_fr + offset_x);
+            volatile INT* frgnd_pixel_ptr =  fr_pixels + 4 * (y_fr_shift + x_fr);
 
-            __m128i bkgnd_arr_16 = _mm_loadu_si128 ((__m128i*) bkgnd_pixel_ptr);
-            __m128i frgnd_arr_16 = _mm_loadu_si128 ((__m128i*) frgnd_pixel_ptr);
+            volatile __m128i bkgnd_arr_16 = _mm_loadu_si128 ((__m128i*) bkgnd_pixel_ptr);
+            volatile __m128i frgnd_arr_16 = _mm_loadu_si128 ((__m128i*) frgnd_pixel_ptr);
 
-            __m256i bkgnd_arr_32 = _mm256_cvtepi8_epi16 (bkgnd_arr_16);
-            __m256i frgnd_arr_32 = _mm256_cvtepi8_epi16 (frgnd_arr_16);
+            volatile __m256i bkgnd_arr_32 = _mm256_cvtepi8_epi16 (bkgnd_arr_16);
+            volatile __m256i frgnd_arr_32 = _mm256_cvtepi8_epi16 (frgnd_arr_16);
 
-            __m256i alpha_mask = _mm256_set_epi8 (ZERO, ZERO, ZERO, 14, ZERO, 14, ZERO, 14, 
+            volatile __m256i alpha_mask = _mm256_set_epi8 (ZERO, ZERO, ZERO, 14, ZERO, 14, ZERO, 14, 
                                                   ZERO, ZERO, ZERO,  6, ZERO,  6, ZERO,  6,
                                                   ZERO, ZERO, ZERO, 14, ZERO, 14, ZERO, 14, 
                                                   ZERO, ZERO, ZERO,  6, ZERO,  6, ZERO,  6);
 
-            __m256i alpha_arr = _mm256_shuffle_epi8(frgnd_arr_32, alpha_mask);
+            volatile __m256i alpha_arr = _mm256_shuffle_epi8(frgnd_arr_32, alpha_mask);
 
-            __m256i bkgnd_255_sub_alpha = _mm256_sub_epi16 (set1_255_arr, alpha_arr);
+            volatile __m256i bkgnd_255_sub_alpha = _mm256_sub_epi16 (set1_255_arr, alpha_arr);
 
-            __m256i frgnd_multiplied = _mm256_mullo_epi16 (frgnd_arr_32, alpha_arr);
-            __m256i bkgnd_multiplied = _mm256_mullo_epi16 (bkgnd_arr_32, bkgnd_255_sub_alpha);
+            volatile __m256i frgnd_multiplied = _mm256_mullo_epi16 (frgnd_arr_32, alpha_arr);
+            volatile __m256i bkgnd_multiplied = _mm256_mullo_epi16 (bkgnd_arr_32, bkgnd_255_sub_alpha);
 
-            __m256i sum_bk_fr = _mm256_add_epi16 (frgnd_multiplied, bkgnd_multiplied);
+            volatile __m256i sum_bk_fr = _mm256_add_epi16 (frgnd_multiplied, bkgnd_multiplied);
 
-            __m256i sum_mask = _mm256_set_epi8 (15,    13,   11,    9,    7,    5,    3,    1,
+            volatile __m256i sum_mask = _mm256_set_epi8 (15,    13,   11,    9,    7,    5,    3,    1,
                                                 ZERO,  ZERO, ZERO,  ZERO, ZERO, ZERO, ZERO, ZERO,
                                                 ZERO,  ZERO, ZERO,  ZERO, ZERO, ZERO, ZERO, ZERO,
                                                 15,    13,   11,    9,    7,    5,    3,    1);
 
-            __m256i sum = _mm256_shuffle_epi8 (sum_bk_fr, sum_mask);
+            volatile __m256i sum = _mm256_shuffle_epi8 (sum_bk_fr, sum_mask);
 
-            __m128i color = _mm_add_epi64(_mm256_extracti128_si256(sum, 1), _mm256_extracti128_si256(sum, 0));
+            volatile __m128i color = _mm_add_epi64(_mm256_extracti128_si256(sum, 1), _mm256_extracti128_si256(sum, 0));
 
 
             #if DRAW
