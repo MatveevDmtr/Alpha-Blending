@@ -3,7 +3,11 @@
 typedef sf::Uint8 INT;
 typedef unsigned char BYTE;
 
+#ifdef MEASURING
 const int NUM_MEASURES = 100;
+#else
+const int NUM_MEASURES = 1;
+#endif
 
 const BYTE ZERO = 0x80;
 
@@ -49,7 +53,7 @@ int main()
         time_sum_noavx += 1/elapsed_time_NoAVX.asSeconds()/100;
         count_measures++;
     }
-    
+
     printf("end of measuring\n");
 
     bkgnd_im.saveToFile(RES_PATH);
