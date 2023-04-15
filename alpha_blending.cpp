@@ -1,4 +1,26 @@
-#include "alpha_blending.hpp"
+//#include "alpha_blending.hpp"
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <SFML/Graphics.hpp>
+#include <immintrin.h>
+#include <string.h>
+
+typedef struct im_sizes
+{
+    int bk_width;
+    int bk_height;
+    int fr_width;
+    int fr_height;
+} imsizes_t;
+
+const char BKGND_PATH[] = "images/source/background.bmp";
+const char FRGND_PATH[] = "images/source/foreground.bmp";
+const char RES_PATH[]   = "images/result/result.jpg";
+
+void MakeBlending(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int offset_y, imsizes_t* IM_SIZES);
+void MakeBlendingAVX(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int offset_y, imsizes_t* IM_SIZES);
+
 
 typedef sf::Uint8 INT;
 typedef unsigned char BYTE;
@@ -85,20 +107,20 @@ int main()
 
 void MakeBlending(sf::Image* bkgnd_im, sf::Image* frgnd_im, int offset_x, int offset_y, imsizes_t* IM_SIZES)
 {
-    INT* bk_pixels = (INT*) bkgnd_im->getPixelsPtr();
-    INT* fr_pixels = (INT*) frgnd_im->getPixelsPtr();
+    volatile INT* bk_pixels = (INT*) bkgnd_im->getPixelsPtr();
+    volatile INT* fr_pixels = (INT*) frgnd_im->getPixelsPtr();
 
     for (int y_fr = 0; y_fr < IM_SIZES->fr_height; y_fr++)
     {
-        int y_bk_shift = (y_fr + offset_y) * IM_SIZES->bk_width;
-        int y_fr_shift = y_fr * IM_SIZES->fr_width;
+        volatile int y_bk_shift = (y_fr + offset_y) * IM_SIZES->bk_width;
+        volatile int y_fr_shift = y_fr * IM_SIZES->fr_width;
         
         for (int x_fr = 0; x_fr < IM_SIZES->fr_width; x_fr++)
         {
-            INT* bkgnd_pixel =  bk_pixels + 4 * (y_bk_shift + x_fr + offset_x);
-            INT* frgnd_pixel =  fr_pixels + 4 * (y_fr_shift + x_fr);
+            volatile INT* bkgnd_pixel =  bk_pixels + 4 * (y_bk_shift + x_fr + offset_x);
+            volatile INT* frgnd_pixel =  fr_pixels + 4 * (y_fr_shift + x_fr);
 
-            INT alpha = *(frgnd_pixel+3);
+            volatile INT alpha = *(frgnd_pixel+3);
 
             for (int i = 0; i < 3; i++)             // 3 iterations: r, g, b
             {

@@ -1,9 +1,9 @@
 # Переменная CC указывает компилятор, используемый для сборки
 CC=g++
 #В переменной CFLAGS лежат флаги, которые передаются компилятору
-CFLAGS = -mavx2 -c -DDRAW -DMEASURING
+CFLAGS = -mavx2 -c -DDRAW
 #Флаг оптимизации
-OPTFLAG = -O2
+OPTFLAG = -O1
 
 all: alpha_blending execute clean	
 
